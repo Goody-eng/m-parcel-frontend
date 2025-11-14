@@ -10,11 +10,11 @@ const menuByRole = {
   ],
   sme: [
     { path: '/dashboard', label: 'Operations Dashboard', icon: '📦' },
-    { path: '/dashboard?section=performance', label: 'Performance', icon: '📈' },
+    { path: '/sme/orders', label: 'My Orders', icon: '📋' },
   ],
   driver: [
-    { path: '/dashboard', label: 'My Deliveries', icon: '🚚' },
-    { path: '/dashboard?section=history', label: 'Delivery History', icon: '🗂️' },
+    { path: '/dashboard', label: 'My Dashboard', icon: '📊' },
+    { path: '/orders', label: 'My Orders', icon: '🚚' },
   ],
 };
 

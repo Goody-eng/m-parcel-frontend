@@ -3,6 +3,9 @@ import Landing from "../pages/Landing";
 import Signup from "../pages/Signup";
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
+import CreateOrder from "../pages/CreateOrder";
+import DriverOrders from "../pages/DriverOrders";
+import SMEOrders from "../pages/SMEOrders";
 import { useAuth } from "../context/AuthContext";
 
 const PrivateRoute = ({ children }) => {
@@ -69,6 +72,30 @@ export default function AppRoutes() {
         element={
           <PrivateRoute>
             <Dashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/orders/create"
+        element={
+          <PrivateRoute>
+            <CreateOrder />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          <PrivateRoute>
+            <DriverOrders />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/sme/orders"
+        element={
+          <PrivateRoute>
+            <SMEOrders />
           </PrivateRoute>
         }
       />
