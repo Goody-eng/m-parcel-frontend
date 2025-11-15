@@ -6,7 +6,7 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ExclamationTriangleIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 import {
   Area,
   AreaChart,
@@ -42,6 +42,7 @@ const roleMeta = {
       { key: "pendingOrders", label: "Pending", accent: "text-amber-500" },
       { key: "deliveredOrders", label: "Delivered", accent: "text-emerald-500" },
       { key: "totalUsers", label: "Platform Users", accent: "text-sky-500" },
+      { key: "activePanicAlerts", label: "Active Panic Alerts", accent: "text-red-500" },
     ],
   },
   sme: {
@@ -308,6 +309,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [panicAlerts, setPanicAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -497,6 +499,19 @@ const Dashboard = () => {
       }
 
       setOrders(ordersResponse.data || []);
+
+      // Fetch active panic alerts for admin
+      if (role === "admin") {
+        try {
+          const panicResponse = await axiosClient.get("/panic/active");
+          setPanicAlerts(panicResponse.data || []);
+          console.log(`🚨 Active panic alerts: ${panicResponse.data?.length || 0}`);
+        } catch (panicErr) {
+          console.error("❌ Failed to fetch panic alerts:", panicErr);
+          setPanicAlerts([]);
+        }
+      }
+
       console.log(`✅ Dashboard loaded: ${statsResponse.data.totalOrders || 0} total orders, ${ordersResponse.data?.length || 0} orders fetched for board`);
     } catch (err) {
       console.error("❌ Dashboard fetch error:", err);
@@ -511,14 +526,15 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
     
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 10 seconds for admin (to catch panic alerts quickly)
+    // 30 seconds for other roles
     const refreshInterval = setInterval(() => {
       console.log("🔄 Auto-refreshing dashboard data...");
       fetchDashboardData();
-    }, 30000);
+    }, role === "admin" ? 10000 : 30000);
 
     return () => clearInterval(refreshInterval);
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, role]);
 
   return (
     <DashboardLayout>
@@ -539,12 +555,89 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Panic Alert Banner (Admin only) */}
+        {role === "admin" && panicAlerts.length > 0 && (
+          <div className="bg-red-50 border-2 border-red-500 rounded-2xl p-6 shadow-lg">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <ExclamationTriangleIcon className="w-8 h-8 text-red-600 animate-pulse" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-red-900 mb-2">
+                    🚨 {panicAlerts.length} Active Panic Alert{panicAlerts.length > 1 ? "s" : ""}
+                  </h3>
+                  <div className="space-y-2">
+                    {panicAlerts.slice(0, 3).map((alert) => (
+                      <div key={alert._id} className="bg-white rounded-lg p-3 border border-red-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {alert.driverName || alert.driver?.name}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              {alert.driverPhone || alert.driver?.phone}
+                            </p>
+                            {alert.location && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Location: {alert.location.lat?.toFixed(4)}, {alert.location.lon?.toFixed(4)}
+                              </p>
+                            )}
+                            <p className="text-xs text-slate-500 mt-1">
+                              Triggered: {new Date(alert.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await axiosClient.patch(`/panic/${alert._id}/acknowledge`);
+                                  await fetchDashboardData();
+                                } catch (err) {
+                                  alert("Failed to acknowledge alert");
+                                }
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                              Acknowledge
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (window.confirm("Mark this panic alert as resolved?")) {
+                                  try {
+                                    await axiosClient.patch(`/panic/${alert._id}/resolve`);
+                                    await fetchDashboardData();
+                                  } catch (err) {
+                                    alert("Failed to resolve alert");
+                                  }
+                                }
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                            >
+                              Resolve
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {panicAlerts.length > 3 && (
+                      <p className="text-sm text-red-700 font-medium">
+                        +{panicAlerts.length - 3} more alert{panicAlerts.length - 3 > 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <EmptyState message="Loading your delivery insights..." />
         ) : error ? (
           <EmptyState message={error} />
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-6 ${role === "admin" ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-4"}`}>
             {config.cards.map((card) => (
               <StatCard
                 key={card.key}
