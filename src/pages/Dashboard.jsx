@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
@@ -307,6 +307,7 @@ const Dashboard = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -314,29 +315,210 @@ const Dashboard = () => {
 
   const config = useMemo(() => roleMeta[role] || roleMeta.sme, [role]);
   const chartData = useMemo(() => generateRegistrationData(role, stats || {}), [role, stats]);
-  const mapPoints = useMemo(() => roleMapPoints[role] || roleMapPoints.sme, [role]);
-  const boardColumns = useMemo(() => roleBoards[role] || roleBoards.sme, [role]);
+  
+  // Generate real map points from orders
+  const mapPoints = useMemo(() => {
+    if (!orders || orders.length === 0) {
+      return roleMapPoints[role] || roleMapPoints.sme; // Fallback to static data
+    }
+    
+    // Create map points from real orders (pickup locations)
+    return orders.slice(0, 3).map((order, index) => ({
+      id: index + 1,
+      label: `Order ${order.orderId}`,
+      status: order.status,
+      lat: defaultMapCenter.lat + (Math.random() - 0.5) * 0.1, // Simulated - in production use real coordinates
+      lng: defaultMapCenter.lng + (Math.random() - 0.5) * 0.1,
+    }));
+  }, [orders, role]);
+
+  // Generate real order board from actual orders
+  const boardColumns = useMemo(() => {
+    if (!orders || orders.length === 0) {
+      return roleBoards[role] || roleBoards.sme; // Fallback to static data
+    }
+
+    if (role === "admin") {
+      return [
+        {
+          title: "Unassigned",
+          accent: "bg-amber-50 border-amber-200",
+          items: orders
+            .filter((o) => o.status === "Pending" && !o.assignedDriver)
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Awaiting driver",
+            })),
+        },
+        {
+          title: "Dispatching",
+          accent: "bg-sky-50 border-sky-200",
+          items: orders
+            .filter((o) => o.status === "Pending" && o.assignedDriver)
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Queued",
+            })),
+        },
+        {
+          title: "In Progress",
+          accent: "bg-emerald-50 border-emerald-200",
+          items: orders
+            .filter((o) => o.status === "InTransit")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "In transit",
+            })),
+        },
+      ];
+    } else if (role === "sme") {
+      return [
+        {
+          title: "Queue",
+          accent: "bg-amber-50 border-amber-200",
+          items: orders
+            .filter((o) => o.status === "Pending")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Awaiting driver",
+            })),
+        },
+        {
+          title: "On The Road",
+          accent: "bg-blue-50 border-blue-200",
+          items: orders
+            .filter((o) => o.status === "InTransit")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "In transit",
+            })),
+        },
+        {
+          title: "Completed Today",
+          accent: "bg-emerald-50 border-emerald-200",
+          items: orders
+            .filter((o) => o.status === "Delivered")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Delivered",
+            })),
+        },
+      ];
+    } else {
+      // Driver
+      return [
+        {
+          title: "Assigned",
+          accent: "bg-blue-50 border-blue-200",
+          items: orders
+            .filter((o) => o.status === "Pending")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Pickup",
+            })),
+        },
+        {
+          title: "In Transit",
+          accent: "bg-indigo-50 border-indigo-200",
+          items: orders
+            .filter((o) => o.status === "InTransit")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Delivering",
+            })),
+        },
+        {
+          title: "History",
+          accent: "bg-slate-50 border-slate-200",
+          items: orders
+            .filter((o) => o.status === "Delivered")
+            .slice(0, 5)
+            .map((o) => ({
+              ref: o.orderId,
+              pickup: o.pickupAddress?.substring(0, 20) + "...",
+              dropoff: o.dropoffAddress?.substring(0, 20) + "...",
+              eta: "Delivered",
+            })),
+        },
+      ];
+    }
+  }, [orders, role]);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      const endpoint = config.endpoint;
+      // Fetch stats
+      const statsResponse = await axiosClient.get(endpoint);
+      setStats(statsResponse.data);
+      console.log("📊 Dashboard stats loaded:", statsResponse.data);
+
+      // Fetch orders based on role
+      let ordersResponse;
+      if (role === "admin") {
+        ordersResponse = await axiosClient.get("/orders/all");
+      } else if (role === "sme") {
+        ordersResponse = await axiosClient.get("/orders/mine");
+      } else if (role === "driver") {
+        const [assignedRes, completedRes] = await Promise.all([
+          axiosClient.get("/orders/assigned"),
+          axiosClient.get("/orders/completed"),
+        ]);
+        ordersResponse = { data: [...assignedRes.data, ...completedRes.data] };
+      } else {
+        ordersResponse = { data: [] };
+      }
+
+      setOrders(ordersResponse.data || []);
+      console.log(`✅ Dashboard loaded: ${statsResponse.data.totalOrders || 0} total orders, ${ordersResponse.data?.length || 0} orders fetched for board`);
+    } catch (err) {
+      console.error("❌ Dashboard fetch error:", err);
+      setError(
+        err.response?.data?.message || "We couldn't load your dashboard stats right now."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [config, token, role]);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!token) return;
-      setLoading(true);
-      setError("");
+    fetchDashboardData();
+    
+    // Auto-refresh every 30 seconds
+    const refreshInterval = setInterval(() => {
+      console.log("🔄 Auto-refreshing dashboard data...");
+      fetchDashboardData();
+    }, 30000);
 
-      try {
-        const { data } = await axiosClient.get(config.endpoint);
-        setStats(data);
-      } catch (err) {
-        setError(
-          err.response?.data?.message || "We couldn’t load your dashboard stats right now."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [config.endpoint, token]);
+    return () => clearInterval(refreshInterval);
+  }, [fetchDashboardData]);
 
   return (
     <DashboardLayout>
@@ -407,11 +589,26 @@ const Dashboard = () => {
                   <p className="text-xs uppercase tracking-wide text-slate-400">Order board</p>
                   <h2 className="text-lg font-semibold text-slate-900">Live queue</h2>
                 </div>
-                <button className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:text-indigo-600">
+                <button 
+                  onClick={() => {
+                    if (role === "admin") {
+                      navigate("/dashboard?section=orders");
+                    } else if (role === "sme") {
+                      navigate("/sme/orders");
+                    } else {
+                      navigate("/orders");
+                    }
+                  }}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+                >
                   View all
                 </button>
               </div>
-              <OrdersBoard columns={boardColumns} />
+              {boardColumns.some(col => col.items.length > 0) ? (
+                <OrdersBoard columns={boardColumns} />
+              ) : (
+                <EmptyState message="No orders to display. Orders will appear here as they are created." />
+              )}
             </div>
           </>
         )}
