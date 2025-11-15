@@ -535,11 +535,22 @@ const Dashboard = () => {
       // Fetch active panic alerts for admin
       if (role === "admin") {
         try {
+          console.log("🔍 Fetching active panic alerts from API...");
           const panicResponse = await axiosClient.get("/panic/active");
-          setPanicAlerts(panicResponse.data || []);
-          console.log(`🚨 Active panic alerts: ${panicResponse.data?.length || 0}`);
+          console.log("📥 Panic alerts API response:", panicResponse.data);
+          
+          // Ensure response is an array
+          const alerts = Array.isArray(panicResponse.data) ? panicResponse.data : [];
+          setPanicAlerts(alerts);
+          console.log(`🚨 Active panic alerts loaded: ${alerts.length}`);
+          if (alerts.length > 0) {
+            alerts.forEach(alert => {
+              console.log(`   - ${alert.driverName || alert.driver?.name} (${alert._id})`);
+            });
+          }
         } catch (panicErr) {
           console.error("❌ Failed to fetch panic alerts:", panicErr);
+          console.error("❌ Error details:", panicErr.response?.data || panicErr.message);
           setPanicAlerts([]);
         }
       }
