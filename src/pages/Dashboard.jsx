@@ -999,9 +999,19 @@ const PanicAlertsSection = ({ onBack }) => {
     const fetchAlerts = async () => {
       try {
         const { data } = await axiosClient.get("/panic/history");
-        setAlerts(data);
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setAlerts(data);
+        } else if (data && Array.isArray(data.alerts)) {
+          setAlerts(data.alerts);
+        } else {
+          console.warn("Panic alerts response is not an array:", data);
+          setAlerts([]);
+        }
       } catch (err) {
+        console.error("Error fetching panic alerts:", err);
         setError(err.response?.data?.message || "Failed to load panic alerts");
+        setAlerts([]);
       } finally {
         setLoading(false);
       }
@@ -1058,7 +1068,7 @@ const PanicAlertsSection = ({ onBack }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {alerts.length === 0 ? (
+                  {!Array.isArray(alerts) || alerts.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
                         No panic alerts found
