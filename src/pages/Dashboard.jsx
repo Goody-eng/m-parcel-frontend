@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
-import { PlusIcon, ExclamationTriangleIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ExclamationTriangleIcon, XMarkIcon, CheckCircleIcon, ArrowLeftIcon, PencilIcon, TrashIcon, UserIcon, PhoneIcon } from "@heroicons/react/24/outline";
 import {
   Area,
   AreaChart,
@@ -38,11 +38,36 @@ const roleMeta = {
     subtitle: "Monitor fleet, users, and delivery performance in real time.",
     endpoint: "/dashboard/admin",
     cards: [
-      { key: "totalOrders", label: "Total Orders", accent: "text-indigo-500" },
-      { key: "pendingOrders", label: "Pending", accent: "text-amber-500" },
-      { key: "deliveredOrders", label: "Delivered", accent: "text-emerald-500" },
-      { key: "totalUsers", label: "Platform Users", accent: "text-sky-500" },
-      { key: "activePanicAlerts", label: "Active Panic Alerts", accent: "text-red-500" },
+      { 
+        key: "totalOrders", 
+        label: "Total Orders", 
+        accent: "text-indigo-500",
+        onClick: (navigate) => navigate("/dashboard?section=orders"),
+      },
+      { 
+        key: "pendingOrders", 
+        label: "Pending", 
+        accent: "text-amber-500",
+        onClick: (navigate) => navigate("/dashboard?section=orders&filter=Pending"),
+      },
+      { 
+        key: "deliveredOrders", 
+        label: "Delivered", 
+        accent: "text-emerald-500",
+        onClick: (navigate) => navigate("/dashboard?section=orders&filter=Delivered"),
+      },
+      { 
+        key: "totalUsers", 
+        label: "Platform Users", 
+        accent: "text-sky-500",
+        onClick: (navigate) => navigate("/dashboard?section=users"),
+      },
+      { 
+        key: "activePanicAlerts", 
+        label: "Active Panic Alerts", 
+        accent: "text-red-500",
+        onClick: (navigate) => navigate("/dashboard?section=panic"),
+      },
     ],
   },
   sme: {
@@ -200,8 +225,13 @@ const DashboardLayout = ({ children }) => {
   );
 };
 
-const StatCard = ({ label, value, accent }) => (
-  <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+const StatCard = ({ label, value, accent, onClick, clickable = false }) => (
+  <div 
+    className={`rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60 transition ${
+      clickable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300" : ""
+    }`}
+    onClick={onClick}
+  >
     <p className="text-sm font-medium text-slate-500">{label}</p>
     <p className={`mt-3 text-3xl font-bold tracking-tight ${accent}`}>{value}</p>
   </div>
@@ -307,6 +337,8 @@ const OrdersBoard = ({ columns }) => (
 const Dashboard = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const section = searchParams.get("section");
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [panicAlerts, setPanicAlerts] = useState([]);
@@ -536,6 +568,20 @@ const Dashboard = () => {
     return () => clearInterval(refreshInterval);
   }, [fetchDashboardData, role]);
 
+  // Render section views for admin
+  if (role === "admin" && section) {
+    if (section === "users") {
+      return <UsersSection onBack={() => navigate("/dashboard")} />;
+    }
+    if (section === "orders") {
+      const filter = searchParams.get("filter");
+      return <OrdersInsightsSection filter={filter} onBack={() => navigate("/dashboard")} />;
+    }
+    if (section === "panic") {
+      return <PanicAlertsSection onBack={() => navigate("/dashboard")} />;
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -644,6 +690,8 @@ const Dashboard = () => {
                 label={card.label}
                 value={stats?.[card.key] ?? 0}
                 accent={card.accent}
+                clickable={!!card.onClick}
+                onClick={() => card.onClick && card.onClick(navigate)}
               />
             ))}
           </div>
@@ -704,6 +752,343 @@ const Dashboard = () => {
               )}
             </div>
           </>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// Users Section Component
+const UsersSection = ({ onBack }) => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const { data } = await axiosClient.get("/users");
+        setUsers(data);
+      } catch (err) {
+        setError(err.response?.data?.message || "Failed to load users");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const getRoleBadge = (role) => {
+    const colors = {
+      admin: "bg-purple-100 text-purple-800",
+      sme: "bg-blue-100 text-blue-800",
+      driver: "bg-green-100 text-green-800",
+    };
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[role] || "bg-gray-100 text-gray-800"}`}>
+        {role?.toUpperCase() || "N/A"}
+      </span>
+    );
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <ArrowLeftIcon className="w-5 h-5 text-slate-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Manage Users</h1>
+              <p className="text-sm text-slate-600 mt-1">View and manage all platform users</p>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <EmptyState message="Loading users..." />
+        ) : error ? (
+          <EmptyState message={error} />
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Phone</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-12 text-center text-slate-500">
+                        No users found
+                      </td>
+                    </tr>
+                  ) : (
+                    users.map((user) => (
+                      <tr key={user._id} className="hover:bg-slate-50 transition">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold">
+                              {user.name?.charAt(0)?.toUpperCase() || "U"}
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">{user.name || "N/A"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <PhoneIcon className="w-4 h-4" />
+                            {user.phone || "N/A"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">{getRoleBadge(user.role)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              title="Edit User"
+                            >
+                              <PencilIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                              className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="Delete User"
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// Orders Insights Section Component
+const OrdersInsightsSection = ({ filter, onBack }) => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const { data } = await axiosClient.get("/orders/all");
+        setOrders(filter ? data.filter(o => o.status === filter) : data);
+      } catch (err) {
+        setError(err.response?.data?.message || "Failed to load orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [filter]);
+
+  const getStatusBadge = (status) => {
+    const badges = {
+      Pending: "bg-amber-100 text-amber-800",
+      InTransit: "bg-blue-100 text-blue-800",
+      Delivered: "bg-emerald-100 text-emerald-800",
+      Cancelled: "bg-red-100 text-red-800",
+    };
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${badges[status] || "bg-gray-100 text-gray-800"}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <ArrowLeftIcon className="w-5 h-5 text-slate-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Orders Insights</h1>
+              <p className="text-sm text-slate-600 mt-1">
+                {filter ? `Showing ${filter} orders` : "View all orders across the platform"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <EmptyState message="Loading orders..." />
+        ) : error ? (
+          <EmptyState message={error} />
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Order ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Customer</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                        No orders found
+                      </td>
+                    </tr>
+                  ) : (
+                    orders.map((order) => (
+                      <tr key={order._id} className="hover:bg-slate-50 transition">
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">{order.orderId}</td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-slate-900">{order.customerName}</p>
+                            <p className="text-sm text-slate-500">{order.customerPhone}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(order.status)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">
+                          KES {order.amount?.toLocaleString() || "0"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// Panic Alerts Section Component
+const PanicAlertsSection = ({ onBack }) => {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const { data } = await axiosClient.get("/panic/history");
+        setAlerts(data);
+      } catch (err) {
+        setError(err.response?.data?.message || "Failed to load panic alerts");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAlerts();
+  }, []);
+
+  const getStatusBadge = (status) => {
+    const badges = {
+      Active: "bg-red-100 text-red-800",
+      Acknowledged: "bg-blue-100 text-blue-800",
+      Resolved: "bg-emerald-100 text-emerald-800",
+    };
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${badges[status] || "bg-gray-100 text-gray-800"}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <ArrowLeftIcon className="w-5 h-5 text-slate-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Panic Alert History</h1>
+              <p className="text-sm text-slate-600 mt-1">View all panic alerts and their status</p>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <EmptyState message="Loading panic alerts..." />
+        ) : error ? (
+          <EmptyState message={error} />
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Driver</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Phone</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Triggered</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Location</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {alerts.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                        No panic alerts found
+                      </td>
+                    </tr>
+                  ) : (
+                    alerts.map((alert) => (
+                      <tr key={alert._id} className="hover:bg-slate-50 transition">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-900">
+                          {alert.driverName || alert.driver?.name || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                          {alert.driverPhone || alert.driver?.phone || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(alert.status)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                          {new Date(alert.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                          {alert.location 
+                            ? `${alert.location.lat?.toFixed(4)}, ${alert.location.lon?.toFixed(4)}`
+                            : "N/A"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
