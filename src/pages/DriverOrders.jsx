@@ -13,6 +13,7 @@ import {
   PhoneIcon,
   XMarkIcon,
   CameraIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleIconSolid } from "@heroicons/react/24/solid";
 
@@ -29,6 +30,7 @@ export default function DriverOrders() {
   const [deliveryProof, setDeliveryProof] = useState(null);
   const [proofPreview, setProofPreview] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("Paid");
+  const [panicLoading, setPanicLoading] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -128,6 +130,23 @@ export default function DriverOrders() {
     }
   };
 
+  const handlePanicButton = async () => {
+    if (!window.confirm("🚨 Are you sure you want to trigger a PANIC ALERT? This will notify all administrators immediately!")) {
+      return;
+    }
+
+    setPanicLoading(true);
+    try {
+      const { data } = await axiosClient.post("/panic/trigger");
+      alert(`🚨 ${data.message}\n\n${data.notified} administrator(s) have been notified. Help is on the way!`);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to send panic alert. Please call emergency services directly!");
+      console.error("Error triggering panic:", err);
+    } finally {
+      setPanicLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-slate-100">
@@ -145,16 +164,35 @@ export default function DriverOrders() {
   return (
     <div className="flex min-h-screen bg-slate-100">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Navbar />
-        <div className="flex-1 px-6 py-8">
-          <div className="space-y-8">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">My Orders</h1>
-              <p className="text-sm text-slate-600 mt-1">
-                Manage your active deliveries and view completed rides
-              </p>
-            </div>
+        <div className="flex flex-1 flex-col">
+          <Navbar />
+          <div className="flex-1 px-6 py-8">
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900">My Orders</h1>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Manage your active deliveries and view completed rides
+                  </p>
+                </div>
+                <button
+                  onClick={handlePanicButton}
+                  disabled={panicLoading}
+                  className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-500/30"
+                >
+                  {panicLoading ? (
+                    <>
+                      <ClockIcon className="w-5 h-5 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <ExclamationTriangleIcon className="w-5 h-5" />
+                      Panic Button
+                    </>
+                  )}
+                </button>
+              </div>
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
