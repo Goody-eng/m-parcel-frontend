@@ -6,7 +6,18 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
-import { PlusIcon, ExclamationTriangleIcon, XMarkIcon, CheckCircleIcon, ArrowLeftIcon, PencilIcon, TrashIcon, UserIcon, PhoneIcon } from "@heroicons/react/24/outline";
+import {
+  PlusIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  ArrowLeftIcon,
+  PencilIcon,
+  TrashIcon,
+  PhoneIcon,
+  MapPinIcon,
+  WalletIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
 import {
   Area,
   AreaChart,
@@ -85,9 +96,9 @@ const roleMeta = {
     subtitle: "Stay on top of assigned deliveries and completion targets.",
     endpoint: "/dashboard/driver",
     cards: [
-      { key: "totalOrders", label: "Assigned", accent: "text-indigo-500" },
-      { key: "inTransitOrders", label: "In Transit", accent: "text-amber-500" },
-      { key: "deliveredOrders", label: "Delivered", accent: "text-emerald-500" },
+      { key: "totalOrders", label: "Assigned", accent: "text-indigo-200" },
+      { key: "inTransitOrders", label: "In Transit", accent: "text-amber-200" },
+      { key: "deliveredOrders", label: "Delivered", accent: "text-emerald-200" },
     ],
   },
 };
@@ -225,17 +236,22 @@ const DashboardLayout = ({ children }) => {
   );
 };
 
-const StatCard = ({ label, value, accent, onClick, clickable = false }) => (
-  <div 
-    className={`rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60 transition ${
-      clickable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300" : ""
-    }`}
-    onClick={onClick}
-  >
-    <p className="text-sm font-medium text-slate-500">{label}</p>
-    <p className={`mt-3 text-3xl font-bold tracking-tight ${accent}`}>{value}</p>
-  </div>
-);
+const StatCard = ({ label, value, accent, onClick, clickable = false, variant = "light" }) => {
+  const isDark = variant === "dark";
+  return (
+    <div
+      className={`rounded-2xl p-6 shadow-sm ring-1 transition ${
+        isDark
+          ? "bg-white/10 text-white ring-white/20"
+          : "bg-white ring-slate-200/60"
+      } ${clickable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300" : ""}`}
+      onClick={onClick}
+    >
+      <p className={`text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-500"}`}>{label}</p>
+      <p className={`mt-3 text-3xl font-bold tracking-tight ${accent}`}>{value}</p>
+    </div>
+  );
+};
 
 const EmptyState = ({ message }) => (
   <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
@@ -280,12 +296,12 @@ const RegistrationChart = ({ data }) => (
   </ResponsiveContainer>
 );
 
-const NairobiMap = ({ points }) => (
+const NairobiMap = ({ points, heightClass = "h-64" }) => (
   <MapContainer
     center={[defaultMapCenter.lat, defaultMapCenter.lng]}
     zoom={12}
     scrollWheelZoom={false}
-    className="h-64 w-full rounded-2xl"
+    className={`w-full rounded-2xl ${heightClass}`}
   >
     <TileLayer
       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -331,6 +347,483 @@ const OrdersBoard = ({ columns }) => (
         </div>
       </div>
     ))}
+  </div>
+);
+
+const StatsGrid = ({ cards, stats, navigate, variant = "light" }) => (
+  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {cards.map((card) => (
+      <StatCard
+        key={card.key}
+        label={card.label}
+        value={stats?.[card.key] ?? 0}
+        accent={card.accent}
+        clickable={!!card.onClick}
+        onClick={() => card.onClick && navigate && card.onClick(navigate)}
+        variant={variant}
+      />
+    ))}
+  </div>
+);
+
+const formatCurrency = (value = 0) => `KES ${Number(value || 0).toLocaleString()}`;
+
+const getStatusBadgeClasses = (status) => {
+  switch (status) {
+    case "InTransit":
+      return "bg-indigo-100 text-indigo-700";
+    case "Delivered":
+      return "bg-emerald-100 text-emerald-700";
+    case "Pending":
+    default:
+      return "bg-amber-100 text-amber-700";
+  }
+};
+
+const DriverMissionPanel = ({ order }) => {
+  if (!order) {
+    return <EmptyState message="No active deliveries assigned yet." />;
+  }
+
+  return (
+    <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-slate-100">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">On Demand</p>
+          <h2 className="text-2xl font-semibold text-slate-900">Order {order.orderId}</h2>
+          <p className="text-sm text-slate-500">Updated {new Date(order.updatedAt || Date.now()).toLocaleTimeString()}</p>
+        </div>
+        <span className={`rounded-full px-4 py-1 text-xs font-semibold ${getStatusBadgeClasses(order.status)}`}>
+          {order.status || "Pending"}
+        </span>
+      </div>
+
+      <div className="mt-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Customer</p>
+            <p className="text-base font-semibold text-slate-900">{order.customerName || "Walk-in customer"}</p>
+            <p className="text-sm text-slate-500">{order.customerPhone || "N/A"}</p>
+          </div>
+          {order.customerPhone && (
+            <a
+              href={`tel:${order.customerPhone}`}
+              className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+            >
+              <PhoneIcon className="h-4 w-4" />
+              Call
+            </a>
+          )}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-100 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <TruckIcon className="h-4 w-4 text-indigo-500" />
+              Vehicle & Service
+            </div>
+            <p className="text-sm text-slate-500">{order.vehicleType || "Van"}</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">On-Demand</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">OTP Required</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-100 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <WalletIcon className="h-4 w-4 text-emerald-500" />
+              Payment
+            </div>
+            <p className="text-2xl font-semibold text-slate-900">{formatCurrency(order.amount)}</p>
+            <p className="text-sm text-slate-500">Wallet balance: {order.paymentStatus || "COD"}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl bg-slate-50/80 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Pickup</p>
+            <p className="mt-1 flex items-start gap-2 text-sm text-slate-700">
+              <MapPinIcon className="mt-0.5 h-4 w-4 text-indigo-500" />
+              {order.pickupAddress || "Awaiting confirmation"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-slate-50/80 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Delivery</p>
+            <p className="mt-1 flex items-start gap-2 text-sm text-slate-700">
+              <MapPinIcon className="mt-0.5 h-4 w-4 text-emerald-500" />
+              {order.dropoffAddress || "Awaiting confirmation"}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DriverTimeline = ({ status }) => {
+  const steps = [
+    { label: "Unassigned", description: "Awaiting dispatcher" },
+    { label: "Dispatching", description: "Driver notified" },
+    { label: "In Progress", description: "Parcel on the move" },
+    { label: "Completed", description: "Proof submitted" },
+  ];
+
+  const statusIndexMap = {
+    Pending: 1,
+    InTransit: 2,
+    Delivered: 3,
+  };
+
+  const activeIndex = statusIndexMap[status] ?? 0;
+
+  return (
+    <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Journey</p>
+          <h3 className="text-lg font-semibold text-slate-900">Today's mission status</h3>
+        </div>
+        <span className="text-xs text-slate-500">Auto-refresh</span>
+      </div>
+      <ol className="mt-4 space-y-4">
+        {steps.map((step, index) => {
+          const completed = index <= activeIndex;
+          return (
+            <li key={step.label} className="flex items-start gap-3">
+              <span
+                className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                  completed ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-500"
+                }`}
+              >
+                {completed ? <CheckCircleIcon className="h-4 w-4 text-white" /> : index + 1}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{step.label}</p>
+                <p className="text-xs text-slate-500">{step.description}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+};
+
+const DriverWalletCard = ({ amount = 0, delivered = 0 }) => (
+  <div className="rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 text-white shadow-lg">
+    <p className="text-xs uppercase tracking-[0.3em] text-emerald-100">Wallet</p>
+    <h3 className="mt-2 text-2xl font-semibold">KES {(Number(amount) || 0).toLocaleString()}</h3>
+    <p className="text-sm text-emerald-50">Projected payout for today's route</p>
+    <div className="mt-6 flex items-center justify-between text-sm">
+      <div>
+        <p className="text-emerald-100">Completed</p>
+        <p className="text-lg font-semibold text-white">{delivered}</p>
+      </div>
+      <div className="text-right">
+        <p className="text-emerald-100">Next cashout</p>
+        <p className="font-semibold">Friday, 4:00pm</p>
+      </div>
+    </div>
+  </div>
+);
+
+const KanbanBoard = ({ columns }) => (
+  <div className="space-y-4">
+    {columns.map((column) => (
+      <div key={column.title} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">{column.title}</p>
+            <h3 className="text-xl font-semibold text-slate-900">{column.items.length} orders</h3>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+            Live
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {column.items.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              Nothing here yet.
+            </div>
+          ) : (
+            column.items.map((item) => (
+              <div
+                key={item.ref}
+                className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-sm text-slate-700"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-slate-900">{item.ref}</p>
+                  <span className="text-xs text-slate-500">{item.eta}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{item.pickup} → {item.dropoff}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const AdminDashboardView = ({
+  config,
+  stats,
+  chartData,
+  mapPoints,
+  boardColumns,
+  panicAlerts,
+  navigate,
+  onAcknowledgeAlert,
+  onResolveAlert,
+}) => (
+  <div className="space-y-8">
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-900 to-slate-900 p-8 text-white shadow-lg">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
+      <div className="relative">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Admin Center</p>
+            <h1 className="text-3xl font-bold">Operations Control Center</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-200">
+              Monitor registrations, drivers, orders, and panic alerts in one glance.
+            </p>
+          </div>
+          <div className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white">
+            Auto-refresh every 10s
+          </div>
+        </div>
+        <div className="mt-6">
+          <StatsGrid cards={config.cards} stats={stats} navigate={navigate} variant="dark" />
+        </div>
+      </div>
+    </section>
+
+    {panicAlerts.length > 0 && (
+      <div className="rounded-3xl border border-red-200 bg-red-50/80 p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <ExclamationTriangleIcon className="h-10 w-10 text-red-500" />
+          <div className="flex-1 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-wide text-red-500">Active Panic Alerts</p>
+                <h3 className="text-2xl font-semibold text-red-900">{panicAlerts.length} driver(s) flagged</h3>
+              </div>
+              <button
+                onClick={() => navigate("/dashboard?section=panic")}
+                className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100/70"
+              >
+                Open panic center
+              </button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {panicAlerts.slice(0, 2).map((alert) => (
+                <div key={alert._id} className="rounded-2xl bg-white/70 p-4 shadow-inner ring-1 ring-red-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-slate-900">{alert.driverName || alert.driver?.name}</p>
+                      <p className="text-xs text-slate-500">{alert.driverPhone || alert.driver?.phone}</p>
+                      {alert.location && (
+                        <p className="text-xs text-slate-500">
+                          {alert.location.lat?.toFixed(4)}, {alert.location.lon?.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {new Date(alert.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => onAcknowledgeAlert(alert._id)}
+                      className="flex-1 rounded-xl bg-slate-900/80 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-900"
+                    >
+                      Acknowledge
+                    </button>
+                    <button
+                      onClick={() => onResolveAlert(alert._id)}
+                      className="flex-1 rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50"
+                    >
+                      Resolve
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Registrations</p>
+            <h2 className="text-lg font-semibold text-slate-900">Customers & Drivers</h2>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            Last week
+          </span>
+        </div>
+        <RegistrationChart data={chartData} />
+      </div>
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Field ops</p>
+            <h2 className="text-lg font-semibold text-slate-900">Live Nairobi map</h2>
+          </div>
+          <span className="text-xs text-slate-500">Updated every 10s</span>
+        </div>
+        <NairobiMap points={mapPoints} heightClass="h-72" />
+      </div>
+    </div>
+
+  <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Order board</p>
+          <h2 className="text-lg font-semibold text-slate-900">Dispatch pipeline</h2>
+        </div>
+        <button
+          onClick={() => navigate("/dashboard?section=orders")}
+          className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+        >
+          View insights
+        </button>
+      </div>
+      {boardColumns.some((col) => col.items.length > 0) ? (
+        <OrdersBoard columns={boardColumns} />
+      ) : (
+        <EmptyState message="No orders to display. Orders will appear here as they are created." />
+      )}
+    </div>
+  </div>
+);
+
+const DriverDashboardView = ({ config, stats, orders, boardColumns, mapPoints }) => {
+  const activeOrder =
+    orders.find((o) => o.status === "InTransit" || o.status === "Pending") || orders[0];
+
+  return (
+    <div className="space-y-8">
+      <section className="rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-900 to-slate-950 p-8 text-white shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">Driver HQ</p>
+            <h1 className="text-3xl font-bold">Today's mission board</h1>
+            <p className="mt-2 max-w-xl text-sm text-slate-200">
+              Track assignments, earnings, and next stops without switching apps.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/10 px-4 py-2 text-xs font-semibold">Last sync • 30s ago</div>
+        </div>
+        <div className="mt-6">
+          <StatsGrid cards={config.cards} stats={stats} navigate={() => {}} variant="dark" />
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+        <DriverMissionPanel order={activeOrder} />
+        <div className="space-y-6">
+          <DriverTimeline status={activeOrder?.status} />
+          <DriverWalletCard amount={activeOrder?.amount || stats?.deliveredOrders * 120} delivered={stats?.deliveredOrders || 0} />
+        </div>
+      </div>
+
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Live map</p>
+            <h2 className="text-lg font-semibold text-slate-900">Route preview</h2>
+          </div>
+          <span className="text-xs text-slate-500">Tap marker for details</span>
+        </div>
+        <NairobiMap points={mapPoints} heightClass="h-72" />
+      </div>
+
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Queues</p>
+            <h2 className="text-lg font-semibold text-slate-900">Tasks timeline</h2>
+          </div>
+          <span className="text-xs text-slate-500">Newest on top</span>
+        </div>
+        {boardColumns.some((col) => col.items.length > 0) ? (
+          <OrdersBoard columns={boardColumns} />
+        ) : (
+          <EmptyState message="No tasks to display." />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SmeDashboardView = ({ config, stats, boardColumns, mapPoints, chartData, onCreateOrder, navigate }) => (
+  <div className="space-y-8">
+    <section className="rounded-3xl bg-gradient-to-r from-indigo-600 via-slate-900 to-slate-950 p-8 text-white shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-100">SME cockpit</p>
+          <h1 className="text-3xl font-bold">Delivery operations overview</h1>
+          <p className="mt-2 max-w-2xl text-sm text-indigo-100">
+            Balance queues, drivers, and customer updates from a single canvas.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={onCreateOrder}
+            className="inline-flex items-center gap-2 rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow hover:bg-white"
+          >
+            <PlusIcon className="h-4 w-4" />
+            New order
+          </button>
+          <button
+            onClick={() => navigate("/dashboard?section=orders")}
+            className="rounded-full border border-white/30 px-5 py-2 text-sm font-semibold text-white hover:bg-white/10"
+          >
+            See insights
+          </button>
+        </div>
+      </div>
+      <div className="mt-6">
+        <StatsGrid cards={config.cards} stats={stats} navigate={() => {}} variant="dark" />
+      </div>
+    </section>
+
+    <div className="grid gap-6 lg:grid-cols-[380px,1fr]">
+      <KanbanBoard columns={boardColumns} />
+      <div className="space-y-6">
+        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Field view</p>
+              <h2 className="text-lg font-semibold text-slate-900">Routes & drivers</h2>
+            </div>
+            <div className="flex gap-2">
+              <button className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">
+                Today
+              </button>
+              <button className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">
+                Week
+              </button>
+            </div>
+          </div>
+          <NairobiMap points={mapPoints} heightClass="h-[420px]" />
+        </div>
+
+        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Fulfilment pulse</p>
+              <h2 className="text-lg font-semibold text-slate-900">Registrations & conversions</h2>
+            </div>
+            <span className="text-xs text-slate-500">Last 7 days</span>
+          </div>
+          <RegistrationChart data={chartData} />
+        </div>
+      </div>
+    </div>
   </div>
 );
 
@@ -593,180 +1086,81 @@ const Dashboard = () => {
     }
   }
 
-  return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-slate-900">{config.title}</h1>
-            <p className="text-sm text-slate-600">{config.subtitle}</p>
-          </div>
-          {role === "sme" && (
-            <button
-              onClick={() => navigate("/orders/create")}
-              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:scale-105"
-            >
-              <PlusIcon className="w-5 h-5" />
-              Create Order
-            </button>
-          )}
-        </div>
+  const acknowledgeAlert = async (id) => {
+    try {
+      await axiosClient.patch(`/panic/${id}/acknowledge`);
+      await fetchDashboardData();
+    } catch (err) {
+      alert("Failed to acknowledge alert");
+    }
+  };
 
-        {/* Panic Alert Banner (Admin only) */}
-        {role === "admin" && panicAlerts.length > 0 && (
-          <div className="bg-red-50 border-2 border-red-500 rounded-2xl p-6 shadow-lg">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <ExclamationTriangleIcon className="w-8 h-8 text-red-600 animate-pulse" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-red-900 mb-2">
-                    🚨 {panicAlerts.length} Active Panic Alert{panicAlerts.length > 1 ? "s" : ""}
-                  </h3>
-                  <div className="space-y-2">
-                    {panicAlerts.slice(0, 3).map((alert) => (
-                      <div key={alert._id} className="bg-white rounded-lg p-3 border border-red-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-slate-900">
-                              {alert.driverName || alert.driver?.name}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              {alert.driverPhone || alert.driver?.phone}
-                            </p>
-                            {alert.location && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                Location: {alert.location.lat?.toFixed(4)}, {alert.location.lon?.toFixed(4)}
-                              </p>
-                            )}
-                            <p className="text-xs text-slate-500 mt-1">
-                              Triggered: {new Date(alert.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await axiosClient.patch(`/panic/${alert._id}/acknowledge`);
-                                  await fetchDashboardData();
-                                } catch (err) {
-                                  alert("Failed to acknowledge alert");
-                                }
-                              }}
-                              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            >
-                              Acknowledge
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (window.confirm("Mark this panic alert as resolved?")) {
-                                  try {
-                                    await axiosClient.patch(`/panic/${alert._id}/resolve`);
-                                    await fetchDashboardData();
-                                  } catch (err) {
-                                    alert("Failed to resolve alert");
-                                  }
-                                }
-                              }}
-                              className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                            >
-                              Resolve
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {panicAlerts.length > 3 && (
-                      <p className="text-sm text-red-700 font-medium">
-                        +{panicAlerts.length - 3} more alert{panicAlerts.length - 3 > 1 ? "s" : ""}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+  const resolveAlert = async (id) => {
+    if (!window.confirm("Mark this panic alert as resolved?")) return;
+    try {
+      await axiosClient.patch(`/panic/${id}/resolve`);
+      await fetchDashboardData();
+    } catch (err) {
+      alert("Failed to resolve alert");
+    }
+  };
 
-        {loading ? (
-          <EmptyState message="Loading your delivery insights..." />
-        ) : error ? (
-          <EmptyState message={error} />
-        ) : (
-          <div className={`grid gap-6 ${role === "admin" ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-4"}`}>
-            {config.cards.map((card) => (
-              <StatCard
-                key={card.key}
-                label={card.label}
-                value={stats?.[card.key] ?? 0}
-                accent={card.accent}
-                clickable={!!card.onClick}
-                onClick={() => card.onClick && card.onClick(navigate)}
-              />
-            ))}
-          </div>
-        )}
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <EmptyState message="Loading your delivery insights..." />
+      </DashboardLayout>
+    );
+  }
 
-        {!loading && !error && (
-          <>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Registrations</p>
-                    <h2 className="text-lg font-semibold text-slate-900">Growth over the last week</h2>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    Last 7 days
-                  </span>
-                </div>
-                <RegistrationChart data={chartData} />
-              </div>
-              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Field Ops</p>
-                    <h2 className="text-lg font-semibold text-slate-900">Live map — Nairobi</h2>
-                  </div>
-                  <span className="text-xs text-slate-500">Updates every 30s</span>
-                </div>
-                <NairobiMap points={mapPoints} />
-              </div>
-            </div>
+  if (error) {
+    return (
+      <DashboardLayout>
+        <EmptyState message={error} />
+      </DashboardLayout>
+    );
+  }
 
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/60">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Order board</p>
-                  <h2 className="text-lg font-semibold text-slate-900">Live queue</h2>
-                </div>
-                <button 
-                  onClick={() => {
-                    if (role === "admin") {
-                      navigate("/dashboard?section=orders");
-                    } else if (role === "sme") {
-                      navigate("/sme/orders");
-                    } else {
-                      navigate("/orders");
-                    }
-                  }}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-                >
-                  View all
-                </button>
-              </div>
-              {boardColumns.some(col => col.items.length > 0) ? (
-                <OrdersBoard columns={boardColumns} />
-              ) : (
-                <EmptyState message="No orders to display. Orders will appear here as they are created." />
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </DashboardLayout>
-  );
+  let content;
+  if (role === "admin") {
+    content = (
+      <AdminDashboardView
+        config={config}
+        stats={stats}
+        chartData={chartData}
+        mapPoints={mapPoints}
+        boardColumns={boardColumns}
+        panicAlerts={panicAlerts}
+        navigate={navigate}
+        onAcknowledgeAlert={acknowledgeAlert}
+        onResolveAlert={resolveAlert}
+      />
+    );
+  } else if (role === "driver") {
+    content = (
+      <DriverDashboardView
+        config={config}
+        stats={stats}
+        orders={orders}
+        boardColumns={boardColumns}
+        mapPoints={mapPoints}
+      />
+    );
+  } else {
+    content = (
+      <SmeDashboardView
+        config={config}
+        stats={stats}
+        boardColumns={boardColumns}
+        mapPoints={mapPoints}
+        chartData={chartData}
+        onCreateOrder={() => navigate("/orders/create")}
+        navigate={navigate}
+      />
+    );
+  }
+
+  return <DashboardLayout>{content}</DashboardLayout>;
 };
 
 // Users Section Component
